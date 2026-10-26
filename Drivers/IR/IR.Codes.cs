@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace Device.IR
+namespace ImplicateX.TinyCLR.Drivers.Decoder.IR
 {
 	public sealed class Code
 	{

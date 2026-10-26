@@ -3,7 +3,7 @@ using System.Collections;
 using System.Text;
 using System.Threading;
 
-namespace WebTuner
+namespace ImplicateX.TinyCLR
 {
 	public static class Text
 	{

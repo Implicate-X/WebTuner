@@ -27,7 +27,7 @@ using System.Threading;
 using GHIElectronics.TinyCLR.Devices.Gpio;
 using GHIElectronics.TinyCLR.Devices.Signals;
 
-namespace Device.IR
+namespace ImplicateX.TinyCLR.Drivers.Decoder.IR
 {
     public sealed class BinaryDistanceDecoder
     {

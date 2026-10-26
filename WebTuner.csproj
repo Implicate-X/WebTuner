@@ -54,27 +54,16 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Board.cs" />
-    <Compile Include="Devices\IR\IR.BDD.cs" />
-    <Compile Include="Devices\IR\IR.Codes.cs" />
-    <Compile Include="Devices\Mcp23017.cs" />
-    <Compile Include="Devices\Mcp23017.Register.cs" />
+    <Compile Include="Drivers\IR\IR.BDD.cs" />
+    <Compile Include="Drivers\IR\IR.Codes.cs" />
+    <Compile Include="Drivers\Mcp23017.cs" />
+    <Compile Include="Drivers\Mcp23017.Register.cs" />
     <Compile Include="Network.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Properties\Res.Designer.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>Res.resx</DependentUpon>
-    </Compile>
     <Compile Include="SerialBus.cs" />
     <Compile Include="Text.cs" />
-    <Compile Include="VFD.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="Properties\Res.resx">
-      <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>Res.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
+    <Compile Include="Drivers\Generic16x2VFD.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

@@ -1,4 +1,13 @@
 <Solution>
+  <Folder Name="/Docs/">
+    <File Path="../../ImplicateX/TinyCLR/Drivers/Tuner/ImplicateX.TinyCLR.Drivers.Tuner.Tef668x/docs/TEF668X - User Manual.pdf" />
+    <File Path="../../ImplicateX/TinyCLR/Drivers/Tuner/ImplicateX.TinyCLR.Drivers.Tuner.Tef668x/docs/TEF668X - User Manual.txt" />
+    <File Path="docs/TU-1500AE Service Manual.pdf" />
+    <File Path="docs/TU-1500AE User Manual.pdf" />
+    <File Path="docs/WebTuner.pdf" />
+    <File Path="docs/WebTuner0001-00.png" />
+    <File Path="docs/WebTuner0002-00.png" />
+  </Folder>
   <Folder Name="/Drivers/">
     <Project Path="../../ImplicateX/TinyCLR/Drivers/Decoder/ImplicateX.TinyCLR.Drivers.Decoder.Ls7366/ImplicateX.TinyCLR.Drivers.Decoder.Ls7366.csproj" Id="6898551b-ee98-4f02-b3e7-19407bc4e4da" />
     <Project Path="../../ImplicateX/TinyCLR/Drivers/Decoder/ImplicateX.TinyCLR.Drivers.Decoder.Vs1053/Library/ImplicateX.TinyCLR.Drivers.Decoder.Vs1053.csproj" Id="6898551b-ee98-4f02-b3e7-19407bc4e5db" />

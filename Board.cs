@@ -4,10 +4,11 @@ using System.Threading;
 using GHIElectronics.TinyCLR.Devices.Gpio;
 using GHIElectronics.TinyCLR.Devices.I2c;
 using GHIElectronics.TinyCLR.Pins;
-using Device.IR;
+using ImplicateX.TinyCLR.Drivers.Display;
 using ImplicateX.TinyCLR.Drivers.Tuner;
 using ImplicateX.TinyCLR.Drivers.Decoder;
 using ImplicateX.TinyCLR.Drivers.Expander;
+using ImplicateX.TinyCLR.Drivers.Decoder.IR;
 
 namespace WebTuner
 {
@@ -73,7 +74,7 @@ namespace WebTuner
 		private Vs1053 codec;
 		private SerialBus serialBus;
 		private Network network;
-		private VFD vfd;
+		private Generic16x2VFD vfd;
 		private BinaryDistanceDecoder bdd;
 		private Tef668x tef668x;
 		private GpioPin tunerResPin;
@@ -266,7 +267,12 @@ namespace WebTuner
 				}
 			};
 
-			vfd = new( gpioController );
+			vfd = new( 
+				gpioController, 
+				vfdClockPinId: ControllerPin.VFDClock, 
+				vfdDataPinId: ControllerPin.VFDData, 
+				vfdCSPinId: ControllerPin.VFDCS, 
+				vfResetPinId: ControllerPin.VFReset );
 
 			Debug.WriteLine( "VFD scrolling start" );
 
@@ -276,8 +282,6 @@ namespace WebTuner
 			Thread vfdThread = new( () => vfd.Run() );
 
 			vfdThread.Start();
-
-
 		}
 
 		private bool ProbeAddress( int address )
