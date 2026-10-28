@@ -8,8 +8,8 @@ using GHIElectronics.TinyCLR.Pins;
 using ImplicateX.TinyCLR;
 using ImplicateX.TinyCLR.Drivers.Display;
 using ImplicateX.TinyCLR.Drivers.Tuner;
-using ImplicateX.TinyCLR.Drivers.Decoder;
 using ImplicateX.TinyCLR.Drivers.Expander;
+using ImplicateX.TinyCLR.Drivers.Decoder;
 using ImplicateX.TinyCLR.Drivers.Decoder.IR;
 using System.Collections.Generic;
 
