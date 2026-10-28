@@ -273,7 +273,7 @@ namespace WebTuner
 
 			Debug.WriteLine( "VFD scrolling start" );
 
-			vfd.SetLines( "Program for you and me", "WDR 5 Test" );
+			vfd.SetLines( "Radio 2 98.8 MHz", "Broadcast for you and me" );
 			vfd.SetScrollDelay( 200 );
 
 			Thread vfdThread = new( () => vfd.Run() );
