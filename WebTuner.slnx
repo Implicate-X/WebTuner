@@ -9,6 +9,7 @@
     <File Path="docs/WebTuner0002-00.png" />
   </Folder>
   <Folder Name="/Drivers/">
+    <Project Path="../../ImplicateX/TinyCLR/Drivers/Decoder/ImplicateX.TinyCLR.Drivers.Decoder.IR.BDD/ImplicateX.TinyCLR.Drivers.Decoder.IR.BDD.csproj" />
     <Project Path="../../ImplicateX/TinyCLR/Drivers/Decoder/ImplicateX.TinyCLR.Drivers.Decoder.Ls7366/ImplicateX.TinyCLR.Drivers.Decoder.Ls7366.csproj" Id="6898551b-ee98-4f02-b3e7-19407bc4e4da" />
     <Project Path="../../ImplicateX/TinyCLR/Drivers/Decoder/ImplicateX.TinyCLR.Drivers.Decoder.Vs1053/Library/ImplicateX.TinyCLR.Drivers.Decoder.Vs1053.csproj" Id="6898551b-ee98-4f02-b3e7-19407bc4e5db" />
     <Project Path="../../ImplicateX/TinyCLR/Drivers/Tuner/ImplicateX.TinyCLR.Drivers.Tuner.Tef668x/Library/ImplicateX.TinyCLR.Drivers.Tuner.Tef668x.csproj" Id="7e80314f-601d-4f37-bc5a-457a18efb985" />

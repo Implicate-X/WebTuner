@@ -54,10 +54,9 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Board.cs" />
-    <Compile Include="Drivers\IR\IR.BDD.cs" />
-    <Compile Include="Drivers\IR\IR.Codes.cs" />
     <Compile Include="Drivers\Mcp23017.cs" />
     <Compile Include="Drivers\Mcp23017.Register.cs" />
+    <Compile Include="ListExtensions.cs" />
     <Compile Include="Network.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -147,6 +146,10 @@
     <Folder Include=".github\" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\ImplicateX\TinyCLR\Drivers\Decoder\ImplicateX.TinyCLR.Drivers.Decoder.IR.BDD\ImplicateX.TinyCLR.Drivers.Decoder.IR.BDD.csproj">
+      <Project>{38864497-1A6E-4B46-B105-11123F7D4090}</Project>
+      <Name>ImplicateX.TinyCLR.Drivers.Decoder.IR.BDD</Name>
+    </ProjectReference>
     <ProjectReference Include="..\..\ImplicateX\TinyCLR\Drivers\Decoder\ImplicateX.TinyCLR.Drivers.Decoder.Ls7366\ImplicateX.TinyCLR.Drivers.Decoder.Ls7366.csproj">
       <Project>{6898551B-EE98-4F02-B3E7-19407BC4E4DA}</Project>
       <Name>ImplicateX.TinyCLR.Drivers.Decoder.Ls7366</Name>

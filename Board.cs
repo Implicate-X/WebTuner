@@ -1,19 +1,29 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Threading;
+using System.Collections;
 using GHIElectronics.TinyCLR.Devices.Gpio;
 using GHIElectronics.TinyCLR.Devices.I2c;
 using GHIElectronics.TinyCLR.Pins;
+using ImplicateX.TinyCLR;
 using ImplicateX.TinyCLR.Drivers.Display;
 using ImplicateX.TinyCLR.Drivers.Tuner;
 using ImplicateX.TinyCLR.Drivers.Decoder;
 using ImplicateX.TinyCLR.Drivers.Expander;
 using ImplicateX.TinyCLR.Drivers.Decoder.IR;
+using System.Collections.Generic;
 
 namespace WebTuner
 {
 	public class Board
 	{
+		public static class I2cAddress
+		{
+			public const byte Expander = 0x20;
+			public const byte RTC = 0x52;
+			public const byte Tuner = 0x64;
+		}
+
 		public static class ControllerPin
 		{
 			public const int RemoteCtrl = FEZFeather.GpioPin.PA0;
@@ -79,17 +89,18 @@ namespace WebTuner
 		private Tef668x tef668x;
 		private GpioPin tunerResPin;
 		private GpioPin tunerRdsPin;
-
 		private GpioPin ledStereoPin;
-		ushort tuneFrequency = 9920; // 8780, 8880, 9120, 9510, 9650, 9810, 9920 (WDR2), 10130, 10330, 10600, 10670
-		// Background RDS/VFD refresh state
-		private readonly object rdsDisplaySync = new object();
-		private Thread rdsDisplayWorkerThread;
-		private bool rdsDisplayWorkerRunning;
-		private double lastDisplayFrequencyMHz = -1.0;
-		private string lastValidStationName = string.Empty;
-		private string lastValidRadioText = string.Empty;
-		private const int RdsDisplayIntervalMs = 100;
+		private GpioPin ledTunedPin;
+		private GpioPin ledRdsPin;
+		private readonly List<byte> i2cAdresses = [ I2cAddress.Expander, I2cAddress.RTC, I2cAddress.Tuner ];
+
+		// 8780, 8880, 9120, 9510 (WDR 3)*
+		// 9650, 9810, 9920 (WDR2)*, 10130 (WDR 4)*
+		// 10330 (WDRcosmo)*, 10600 (bigFM), 10670 (1LIVE)*
+		private ushort tuneFrequency = 9920;
+		private readonly Tef668x.RdsSubSystem rdsSubSystem;
+		private readonly Thread rdsDebugThread;
+		private readonly bool rdsDebugRun;
 
 		public Board()
 		{
@@ -102,14 +113,14 @@ namespace WebTuner
 			gpioController = GpioController.GetDefault();
 			i2cController = I2cController.FromName( FEZDuino.I2cBus.I2c1 );
 
-			for (int i = 8; i < 128; i++ )
+			#region I2C bus scan
+			if( !i2cAdresses.TrueForAll( ProbeAddress ) )
 			{
-				if( ProbeAddress( i ) )
-				{
-					Debug.WriteLine( $"I2C device found at address: 0x{i:X2}" );
-				}
+				Debug.WriteLine( "Warning: Not all expected I2C devices were found on the bus!" );
 			}
+			#endregion
 
+			#region IO Expander MCP23017 Reset sequence
 			GpioPin v1ResetPin = gpioController.OpenPin( ControllerPin.V1Reset );
 			v1ResetPin.SetDriveMode( GpioPinDriveMode.Output );
 			v1ResetPin.Write( GpioPinValue.High );
@@ -118,16 +129,21 @@ namespace WebTuner
 			Thread.Sleep( 100 );
 			v1ResetPin.Write( GpioPinValue.High );
 			Thread.Sleep( 100 );
+			#endregion
 
+			#region IO Expander MCP23017 initialization
 			var mcpDevice = CreateI2cDevice(
 				i2cController,
 				new I2cConnectionSettings( 0x20, I2cMode.Master, I2cAddressFormat.SevenBit, 100_000U ) );
 
+			/// Interrupt pin for MCP23017 Port A is connected to V1INTA (PD0) on the controller
 			var intPin = gpioController.OpenPin( ControllerPin.V1INTA );
 			intPin.SetDriveMode( GpioPinDriveMode.InputPullUp );
 
 			var mcp23017 = new Mcp23017( mcpDevice, interruptPin: intPin );
+			#endregion
 
+			#region SN74LVC8T245 level shifter output enable pins
 			GpioPin v2OutputEnable = mcp23017.OpenPin( ExpanderPin.V2OutputEnable );
 			v2OutputEnable.SetDriveMode( GpioPinDriveMode.Output );
 			v2OutputEnable.Write( GpioPinValue.Low );
@@ -135,11 +151,15 @@ namespace WebTuner
 			GpioPin v3OutputEnable = mcp23017.OpenPin( ExpanderPin.V3OutputEnable );
 			v3OutputEnable.SetDriveMode( GpioPinDriveMode.Output );
 			v3OutputEnable.Write( GpioPinValue.Low );
+			#endregion
 
+			#region Audio Switch ADG888 set to audio output from FM tuner TEF6686 module
 			GpioPin audioSwitchPin = mcp23017.OpenPin( ExpanderPin.AudioSwitch );
 			audioSwitchPin.SetDriveMode( GpioPinDriveMode.Output );
 			audioSwitchPin.Write( GpioPinValue.High );
-
+			#endregion
+			
+			#region Front panel keys pins
 			GpioPin keyMenuPin = mcp23017.OpenPin( ExpanderPin.KeyMenu );
 			keyMenuPin.SetDriveMode( GpioPinDriveMode.InputPullUp );
 			GpioPin keyBandPin = mcp23017.OpenPin( ExpanderPin.KeyBand );
@@ -148,32 +168,21 @@ namespace WebTuner
 			keyAutopresetPin.SetDriveMode( GpioPinDriveMode.InputPullUp );
 			GpioPin keyDimmerPin = mcp23017.OpenPin( ExpanderPin.KeyDimmer );
 			keyDimmerPin.SetDriveMode( GpioPinDriveMode.InputPullUp );
+			#endregion
 
-			GpioPin ledTunedPin = mcp23017.OpenPin( ExpanderPin.LedTuned );
+			#region Front panel LEDs pins
+			ledTunedPin = mcp23017.OpenPin( ExpanderPin.LedTuned );
 			ledTunedPin.SetDriveMode( GpioPinDriveMode.Output );
 			ledTunedPin.Write( GpioPinValue.High );
 			ledStereoPin = mcp23017.OpenPin( ExpanderPin.LedStereo );
 			ledStereoPin.SetDriveMode( GpioPinDriveMode.Output );
 			ledStereoPin.Write( GpioPinValue.High );
+			ledRdsPin = mcp23017.OpenPin( ExpanderPin.LedRDS );
+			ledRdsPin.SetDriveMode( GpioPinDriveMode.Output );
+			ledRdsPin.Write( GpioPinValue.High );
+			#endregion
 
-			//audioSwitchPin.Write( GpioPinValue.High );
-
-			//serialBus = new();
-
-			//codec = new Vs1053(
-			//	uartControllerName: FEZFeather.UartPort.Uart8,
-			//	spiControllerName: FEZFeather.SpiBus.Spi4,
-			//	cmdCsPinID: FEZFeather.GpioPin.PE0,
-			//	datCsPinID: FEZFeather.GpioPin.PE1,
-			//	dreqPinID: FEZFeather.GpioPin.PE7,
-			//	resetPinID: FEZFeather.GpioPin.PE8,
-			//	gpio0PinID: FEZFeather.GpioPin.PD2,
-			//	gpio1PinID: FEZFeather.GpioPin.PC12 );
-
-			//codec.Initialize();
-			////codec.RunStartupSineTest();
-			//codec.PlaySong( @"A:\SHORT.MP3" );
-
+			#region Front panel keys event handlers
 			keyMenuPin.ValueChanged += ( sender, args ) =>
 			{
 				if( args.Edge == GpioPinEdge.FallingEdge )
@@ -208,9 +217,9 @@ namespace WebTuner
 					Debug.WriteLine( $"Key Dimmer pin value changed to: {args.Edge}" );
 				}
 			};
+			#endregion
 
-
-			// LS7366R Quadrature Decoder/Counter
+			#region LS7366R Quadrature Decoder/Counter
 			quadDecoder = new(
 				gpioController,
 				ControllerPin.DecoderCS,
@@ -230,8 +239,50 @@ namespace WebTuner
 
 			quadDecoder.ResetCounter();
 			quadDecoder.Start();
+			#endregion
 
+			#region Initialize Remote Control IR decoder
+			GpioPin remoteCtrlPin = gpioController.OpenPin( ControllerPin.RemoteCtrl );
+			remoteCtrlPin.SetDriveMode( GpioPinDriveMode.Input );
+			#endregion
 
+			#region Remote Control IR Binary Distance Decoder
+			bdd = new BinaryDistanceDecoder( remoteCtrlPin );
+
+			bdd.FrameDecoded += ( arg ) =>
+			{
+				BinaryDistanceDecoder.Code.DENON.TryGetValue( arg.RawValue, out string commandName );
+
+				if( commandName == "Tuning +" )
+				{
+					ApplyTune( true, "Tune Up command received." );
+				}
+				else if( commandName == "Tuning -" )
+				{
+					ApplyTune( false, "Tune Down command received." );
+				}
+			};
+			#endregion
+
+			#region Initialize 16x2 Vacuum Fluorescent Display (VFD)
+			vfd = new(
+				gpioController,
+				vfdClockPinId: ControllerPin.VFDClock,
+				vfdDataPinId: ControllerPin.VFDData,
+				vfdCSPinId: ControllerPin.VFDCS,
+				vfResetPinId: ControllerPin.VFReset );
+
+			Debug.WriteLine( "VFD scrolling start" );
+
+			vfd.SetLines( "Program for you and me", "WDR 5 Test" );
+			vfd.SetScrollDelay( 200 );
+
+			Thread vfdThread = new( () => vfd.Run() );
+
+			vfdThread.Start();
+			#endregion
+
+			#region Initialize TEF6686 FM Tuner
 			tunerResPin = mcp23017.OpenPin( ExpanderPin.TunerReset );
 			tunerRdsPin = gpioController.OpenPin( ControllerPin.TunerRDS );
 
@@ -246,45 +297,34 @@ namespace WebTuner
 			tef668x.Initialize();
 			tef668x.SetAudioMute( mute: false );
 			tef668x.TuneToFm( frequency10kHz: tuneFrequency );
-
-			GpioPin remoteCtrlPin = gpioController.OpenPin( ControllerPin.RemoteCtrl );
-			remoteCtrlPin.SetDriveMode( GpioPinDriveMode.Input );
-
-			// Binary Distance Decoder
-			bdd = new BinaryDistanceDecoder( remoteCtrlPin );
-
-			bdd.FrameDecoded += ( arg ) =>
-			{
-				Code.DENON.TryGetValue( arg.RawValue, out string commandName );
-
-				if( commandName == "Tuning +" )
-				{
-					ApplyTune( true, "Tune Up command received." );
-				}
-				else if( commandName == "Tuning -" )
-				{
-					ApplyTune( false, "Tune Down command received." );
-				}
-			};
-
-			vfd = new( 
-				gpioController, 
-				vfdClockPinId: ControllerPin.VFDClock, 
-				vfdDataPinId: ControllerPin.VFDData, 
-				vfdCSPinId: ControllerPin.VFDCS, 
-				vfResetPinId: ControllerPin.VFReset );
-
-			Debug.WriteLine( "VFD scrolling start" );
-
-			vfd.SetLines( "Program for you and me", "WDR 5 Test" );
-			vfd.SetScrollDelay( 200 );
-
-			Thread vfdThread = new( () => vfd.Run() );
-
-			vfdThread.Start();
+			#endregion
 		}
 
-		private bool ProbeAddress( int address )
+		private void RdsDebugLoop()
+		{
+			while( rdsDebugRun )
+			{
+				bool hasNewFrames = false;
+
+				while( rdsSubSystem.TryDequeueRdsFrame( out Tef668x.RdsFrame frame ) )
+				{
+					hasNewFrames = true;
+					Debug.WriteLine(
+						$"RDS Frame: status=0x{frame.Status:X4} loss={frame.HasDataLoss} pi=0x{frame.BlockA:X4} b=0x{frame.BlockB:X4} c=0x{frame.BlockC:X4} d=0x{frame.BlockD:X4}" );
+				}
+
+				if( hasNewFrames )
+				{
+					Tef668x.RdsDisplayModel model = rdsSubSystem.GetDisplayModel();
+					Debug.WriteLine(
+						$"RDS Decoded: PI=0x{rdsSubSystem.Decoder.ProgramIdentifier:X4} PS='{model.PsName}' RT='{model.RadioText}' PTY='{model.PtyText}' TP={model.Tp} TA={model.Ta}" );
+				}
+
+				Thread.Sleep( 250 );
+			}
+		}
+
+		private bool ProbeAddress( byte address )
 		{
 			bool result = false;
 
