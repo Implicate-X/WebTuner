@@ -250,32 +250,43 @@ namespace WebTuner
 		{
 			Debug.WriteLine( "Testing HttpWebRequest to: " + url );
 
-			int read = 0;
 			int total = 0;
 			byte[] result = new byte[ 512 ];
 
 			try
 			{
-				using( var req = HttpWebRequest.Create( url ) as HttpWebRequest )
+				using var req = HttpWebRequest.Create( url ) as HttpWebRequest;
+
+				if ( req == null )
 				{
-					req.KeepAlive = false;
-					req.ReadWriteTimeout = 2000;
-
-					using( var res = req.GetResponse() as HttpWebResponse )
-					using( var stream = res.GetResponseStream() )
-					{
-						do
-						{
-							read = stream.Read( result, 0, result.Length );
-							total += read;
-
-							Debug.WriteLine( "read: " + read + ", total: " + total );
-
-							var page = new string( Encoding.UTF8.GetChars( result, 0, read ) );
-							Debug.WriteLine( "Response: " + page );
-						} while( read != 0 );
-					}
+					Debug.WriteLine( "HttpWebRequest is null" );
+					return;
 				}
+
+				req.KeepAlive = false;
+				req.ReadWriteTimeout = 2000;
+
+				using var res = req.GetResponse() as HttpWebResponse;
+
+				if ( res == null )
+				{
+					Debug.WriteLine( "HttpWebResponse is null" );
+					return;
+				}
+
+				using var stream = res.GetResponseStream();
+
+				int read;
+				do
+				{
+					read = stream.Read( result, 0, result.Length );
+					total += read;
+
+					Debug.WriteLine( "read: " + read + ", total: " + total );
+
+					var page = new string( Encoding.UTF8.GetChars( result, 0, read ) );
+					Debug.WriteLine( "Response: " + page );
+				} while( read != 0 );
 			}
 			catch( Exception ex )
 			{

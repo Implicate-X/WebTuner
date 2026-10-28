@@ -77,30 +77,29 @@ namespace WebTuner
 			public const int LedStereo = 15;
 		}
 
-		private GpioController gpioController;
-		private I2cController i2cController;
-		private readonly Mcp23017 mcp23017;
-		private Ls7366 quadDecoder;
-		private Vs1053 codec;
-		private SerialBus serialBus;
-		private Network network;
-		private Generic16x2VFD vfd;
-		private BinaryDistanceDecoder bdd;
-		private Tef668x tef668x;
-		private GpioPin tunerResPin;
-		private GpioPin tunerRdsPin;
-		private GpioPin ledStereoPin;
-		private GpioPin ledTunedPin;
-		private GpioPin ledRdsPin;
+		private GpioController gpioController = null!;
+		private I2cController i2cController = null!;
+		private Mcp23017 mcp23017 = null!;
+		private Ls7366 quadDecoder = null!;
+		private readonly Vs1053 codec = null!;
+		private readonly SerialBus serialBus = null!;
+		private readonly Network network = null!;
+		private Generic16x2VFD vfd = null!;
+		private BinaryDistanceDecoder bdd = null!;
+		private Tef668x tef668x = null!;
+		private GpioPin tunerResPin = null!;
+		private GpioPin tunerRdsPin = null!;
+		private GpioPin ledStereoPin = null!;
+		private GpioPin ledTunedPin = null!;
+		private GpioPin ledRdsPin = null!;
 		private readonly List<byte> i2cAdresses = [ I2cAddress.Expander, I2cAddress.RTC, I2cAddress.Tuner ];
 
 		// 8780, 8880, 9120, 9510 (WDR 3)*
 		// 9650, 9810, 9920 (WDR2)*, 10130 (WDR 4)*
 		// 10330 (WDRcosmo)*, 10600 (bigFM), 10670 (1LIVE)*
 		private ushort tuneFrequency = 9920;
-		private readonly Tef668x.RdsSubSystem rdsSubSystem;
-		private readonly Thread rdsDebugThread;
-		private readonly bool rdsDebugRun;
+		private readonly Tef668x.RdsSubSystem rdsSubSystem = null!;
+		private readonly bool rdsDebugRun = false;
 
 		public Board()
 		{
@@ -140,7 +139,7 @@ namespace WebTuner
 			var intPin = gpioController.OpenPin( ControllerPin.V1INTA );
 			intPin.SetDriveMode( GpioPinDriveMode.InputPullUp );
 
-			var mcp23017 = new Mcp23017( mcpDevice, interruptPin: intPin );
+			mcp23017 = new Mcp23017( mcpDevice, interruptPin: intPin );
 			#endregion
 
 			#region SN74LVC8T245 level shifter output enable pins
