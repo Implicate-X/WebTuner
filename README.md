@@ -144,6 +144,6 @@ Full control and monitoring of the device via an app—also written in C#.
 ### 🧩 Extended firmware
 Synchronization, streaming logic, UI composition, logging, network stack.
 
-## 📜 License / Notes
-This is a private development project.
-License information to follow.
+## ❤️ TinyCLR OS
+
+Designed for modern embedded development using .NET and TinyCLR OS.
