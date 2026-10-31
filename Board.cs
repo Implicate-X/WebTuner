@@ -1,17 +1,15 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Threading;
-using System.Collections;
+using System.Collections.Generic;
+using GHIElectronics.TinyCLR.Pins;
 using GHIElectronics.TinyCLR.Devices.Gpio;
 using GHIElectronics.TinyCLR.Devices.I2c;
-using GHIElectronics.TinyCLR.Pins;
-using ImplicateX.TinyCLR;
 using ImplicateX.TinyCLR.Drivers.Display;
 using ImplicateX.TinyCLR.Drivers.Tuner;
 using ImplicateX.TinyCLR.Drivers.Expander;
 using ImplicateX.TinyCLR.Drivers.Decoder;
 using ImplicateX.TinyCLR.Drivers.Decoder.IR;
-using System.Collections.Generic;
 
 namespace WebTuner
 {
@@ -81,7 +79,7 @@ namespace WebTuner
 		private I2cController i2cController = null!;
 		private Mcp23017 mcp23017 = null!;
 		private Ls7366 quadDecoder = null!;
-		private readonly Vs1053 codec = null!;
+		private Vs1053 audioCodec = null!;
 		private readonly SerialBus serialBus = null!;
 		private readonly Network network = null!;
 		private Generic16x2VFD vfd = null!;
@@ -98,8 +96,17 @@ namespace WebTuner
 		// 9650, 9810, 9920 (WDR2)*, 10130 (WDR 4)*
 		// 10330 (WDRcosmo)*, 10600 (bigFM), 10670 (1LIVE)*
 		private ushort tuneFrequency = 9920;
-		private readonly Tef668x.RdsSubSystem rdsSubSystem = null!;
-		private readonly bool rdsDebugRun = false;
+		private Tef668x.RdsSubSystem rdsSubSystem = null!;
+		private bool infoThreadRunning = false;
+		private Thread infoThread;
+		private readonly bool EnableDebugOutput = true;
+		private DateTime lastSignalDebugOutputUtc = DateTime.MinValue;
+		private const int SignalUsableScoreThreshold = 20;
+		private const int SignalLevel1Threshold = 80;
+		private const int SignalLevel2Threshold = 130;
+		private const int SignalLevel3Threshold = 180;
+		private const int SignalLevel4Threshold = 240;
+		private const int SignalLevel5Threshold = 320;
 
 		public Board()
 		{
@@ -116,6 +123,7 @@ namespace WebTuner
 			if( !i2cAdresses.TrueForAll( ProbeAddress ) )
 			{
 				Debug.WriteLine( "Warning: Not all expected I2C devices were found on the bus!" );
+				return;
 			}
 			#endregion
 
@@ -133,7 +141,7 @@ namespace WebTuner
 			#region IO Expander MCP23017 initialization
 			var mcpDevice = CreateI2cDevice(
 				i2cController,
-				new I2cConnectionSettings( 0x20, I2cMode.Master, I2cAddressFormat.SevenBit, 100_000U ) );
+				new I2cConnectionSettings( I2cAddress.Expander, I2cMode.Master, I2cAddressFormat.SevenBit ) );
 
 			/// Interrupt pin for MCP23017 Port A is connected to V1INTA (PD0) on the controller
 			var intPin = gpioController.OpenPin( ControllerPin.V1INTA );
@@ -271,9 +279,6 @@ namespace WebTuner
 				vfdCSPinId: ControllerPin.VFDCS,
 				vfResetPinId: ControllerPin.VFReset );
 
-			Debug.WriteLine( "VFD scrolling start" );
-
-			vfd.SetLines( "Radio 2 98.8 MHz", "Broadcast for you and me" );
 			vfd.SetScrollDelay( 200 );
 
 			Thread vfdThread = new( () => vfd.Run() );
@@ -296,33 +301,262 @@ namespace WebTuner
 			tef668x.Initialize();
 			tef668x.SetAudioMute( mute: false );
 			tef668x.TuneToFm( frequency10kHz: tuneFrequency );
+
+			rdsSubSystem = tef668x.CreateRdsSubSystem( dataAvailableActiveHigh: false );
+			rdsSubSystem.Start();
+
+			infoThreadRunning = true;
+			infoThread = new Thread( InfoThread );
+			infoThread.Start();
+
 			#endregion
+
+			//_ = new Storage();
+
+			//audioSwitchPin.Write( GpioPinValue.Low );
+
+			//audioCodec = new Vs1053(
+			//	uartControllerName: FEZDuino.UartPort.Uart1,
+			//	spiControllerName: FEZDuino.SpiBus.Spi6,
+			//	cmdCsPinID: FEZDuino.GpioPin.PC5,
+			//	datCsPinID: FEZDuino.GpioPin.PC6,
+			//	dreqPinID: FEZDuino.GpioPin.PC4,
+			//	resetPinID: FEZDuino.GpioPin.PC7 );
+
+			//audioCodec.Initialize();
+			//audioCodec.SetVolume( leftChannel: 100, rightChannel: 100 );
+			//audioCodec.RunStartupSineTest();
+			//audioCodec.PlaySong( @"A:\Usa-Hymn.mid" );
+			//audioCodec.PlaySong( @"A:\Abba- Thank You for the Music.mp3" );
+			//audioCodec.PlaySong( @"A:\All by Myself.flac" );
+			//audioCodec.PlaySong( @"A:\sample-12s.wav" );
+			//audioCodec.PlaySong( @"A:\ogg_15s.ogg" );
+			//audioCodec.PlaySong( @"A:\aac_15s.aac" );
+			//audioCodec.PlaySong( @"A:\m4a_15s.m4a" );
+
 		}
 
-		private void RdsDebugLoop()
+
+		private void InfoThread()
 		{
-			while( rdsDebugRun )
+			const int toggleIntervalMilliseconds = 3000;
+			const int loopDelayMilliseconds = 200;
+			DateTime nextToggleUtc = DateTime.UtcNow.AddMilliseconds( toggleIntervalMilliseconds );
+			DateTime lastRdsUpdateUtc = DateTime.MinValue;
+			bool showFrequencyAndSignal = true;
+			string rdsLine1 = string.Empty;
+			string rdsLine2 = string.Empty;
+			ushort lastShownFrequency = tuneFrequency;
+
+			while( infoThreadRunning )
 			{
+				if( tuneFrequency != lastShownFrequency )
+				{
+					lastShownFrequency = tuneFrequency;
+					rdsLine1 = string.Empty;
+					rdsLine2 = string.Empty;
+					lastRdsUpdateUtc = DateTime.MinValue;
+					showFrequencyAndSignal = true;
+					nextToggleUtc = DateTime.UtcNow.AddMilliseconds( toggleIntervalMilliseconds );
+				}
+
 				bool hasNewFrames = false;
 
-				while( rdsSubSystem.TryDequeueRdsFrame( out Tef668x.RdsFrame frame ) )
+				while( rdsSubSystem.TryDequeueRdsFrame( out Tef668x.RdsFrame _ ) )
 				{
 					hasNewFrames = true;
-					Debug.WriteLine(
-						$"RDS Frame: status=0x{frame.Status:X4} loss={frame.HasDataLoss} pi=0x{frame.BlockA:X4} b=0x{frame.BlockB:X4} c=0x{frame.BlockC:X4} d=0x{frame.BlockD:X4}" );
 				}
 
 				if( hasNewFrames )
 				{
 					Tef668x.RdsDisplayModel model = rdsSubSystem.GetDisplayModel();
-					Debug.WriteLine(
-						$"RDS Decoded: PI=0x{rdsSubSystem.Decoder.ProgramIdentifier:X4} PS='{model.PsName}' RT='{model.RadioText}' PTY='{model.PtyText}' TP={model.Tp} TA={model.Ta}" );
+
+					rdsLine1 = $"{model.PsName} {model.PtyText}".Trim();
+					rdsLine2 = model.RadioText ?? string.Empty;
+					lastRdsUpdateUtc = DateTime.UtcNow;
 				}
 
-				Thread.Sleep( 250 );
+				bool hasRdsInfo =
+					( !IsNullOrWhiteSpace( rdsLine1 ) || !IsNullOrWhiteSpace( rdsLine2 ) )
+					&& ( DateTime.UtcNow - lastRdsUpdateUtc ).TotalSeconds <= 12;
+
+				if( hasRdsInfo )
+				{
+					if( DateTime.UtcNow >= nextToggleUtc )
+					{
+						showFrequencyAndSignal = !showFrequencyAndSignal;
+						nextToggleUtc = DateTime.UtcNow.AddMilliseconds( toggleIntervalMilliseconds );
+					}
+
+					if( showFrequencyAndSignal )
+						vfd.SetLines( BuildFrequencyAndSignalLine(), rdsLine2 );
+					else
+						vfd.SetLines( rdsLine1, rdsLine2 );
+				}
+				else
+				{
+					rdsLine1 = string.Empty;
+					rdsLine2 = string.Empty;
+					showFrequencyAndSignal = true;
+					nextToggleUtc = DateTime.UtcNow.AddMilliseconds( toggleIntervalMilliseconds );
+					vfd.SetLines( BuildFrequencyAndSignalLine(), string.Empty );
+				}
+
+				Thread.Sleep( loopDelayMilliseconds );
 			}
 		}
 
+		private string BuildFrequencyAndSignalLine()
+		{
+			string frequencyText = $"{tuneFrequency / 100.0:F1} MHz";
+			int signalLevel = GetSignalLevel();
+			string signalMeter = BuildSignalMeter( signalLevel );
+			string line = $"{frequencyText} {signalMeter}";
+
+			return FitToVfdWidth( line, 16 );
+		}
+
+		private int GetSignalLevel()
+		{
+			if( !tef668x.TryGetFmQualityData( out ushort qualityStatus, out short rfLevelDbuV10, out ushort usn, out ushort wam, out short offsetKhz10, out ushort bandwidthKhz10, out ushort modulation ) )
+			{
+				WriteSignalDebug( qualityStatus: 0, signalStatus: 0, rfLevelDbuV10: 0, hasUsableSignal: false, level: 0, note: "quality data read failed" );
+				return 0;
+			}
+
+			if( !tef668x.TryGetFmSignalStatus( out ushort signalStatus ) )
+			{
+				signalStatus = 0;
+			}
+
+			int qualityTimeStamp = qualityStatus & 0x03FF;
+			int score = rfLevelDbuV10 - ( ( usn + wam ) / 2 );
+			bool hasUsableSignal = qualityTimeStamp > 0 && score > SignalUsableScoreThreshold;
+
+			if( !hasUsableSignal )
+			{
+				WriteSignalDebug( qualityStatus, signalStatus, rfLevelDbuV10, hasUsableSignal: false, level: 0, note: $"score={score} usn={usn} wam={wam} off={offsetKhz10} bw={bandwidthKhz10} mod={modulation}" );
+				return 0;
+			}
+
+			int level;
+
+			if( score < SignalLevel1Threshold )
+			{
+				level = 1;
+			}
+			else if( score < SignalLevel2Threshold )
+			{
+				level = 2;
+			}
+			else if( score < SignalLevel3Threshold )
+			{
+				level = 3;
+			}
+			else if( score < SignalLevel4Threshold )
+			{
+				level = 4;
+			}
+			else if( score < SignalLevel5Threshold )
+			{
+				level = 5;
+			}
+			else
+			{
+				level = 6;
+			}
+
+			WriteSignalDebug( qualityStatus, signalStatus, rfLevelDbuV10, hasUsableSignal: true, level: level, note: $"score={score} usn={usn} wam={wam} off={offsetKhz10} bw={bandwidthKhz10} mod={modulation}" );
+			return level;
+		}
+
+		private void WriteSignalDebug( ushort qualityStatus, ushort signalStatus, short rfLevelDbuV10, bool hasUsableSignal, int level, string note = "" )
+		{
+			if( !EnableDebugOutput )
+			{
+				return;
+			}
+
+			DateTime now = DateTime.UtcNow;
+
+			if( ( now - lastSignalDebugOutputUtc ).TotalMilliseconds < 1000 )
+			{
+				return;
+			}
+
+			lastSignalDebugOutputUtc = now;
+			int qualityTimeStamp = qualityStatus & 0x03FF;
+			Debug.WriteLine( $"SignalDbg f={tuneFrequency} qs=0x{qualityStatus:X4} ts={qualityTimeStamp} rf={rfLevelDbuV10} s=0x{signalStatus:X4} valid={( hasUsableSignal ? 1 : 0 )} lvl={level} {note}" );
+		}
+
+		private static string BuildSignalMeter( int level )
+		{
+			if( level < 0 )
+			{
+				level = 0;
+			}
+			else if( level > 6 )
+			{
+				level = 6;
+			}
+
+			char[] meter = new char[ 6 ];
+
+			for( int i = 0; i < meter.Length; i++ )
+			{
+				meter[ i ] = i < level ? (char)( 136 + i ) : ' ';
+			}
+
+			return new string( meter );
+		}
+
+		private static bool IsNullOrWhiteSpace( string value )
+		{
+			if( value == null || value.Length == 0 )
+			{
+				return true;
+			}
+
+			for( int i = 0; i < value.Length; i++ )
+			{
+				if( value[ i ] > ' ' )
+				{
+					return false;
+				}
+			}
+
+			return true;
+		}
+
+		private static string FitToVfdWidth( string value, int width )
+		{
+			if( value == null )
+			{
+				value = string.Empty;
+			}
+
+			if( value.Length >= width )
+			{
+				return value.Substring( 0, width );
+			}
+
+			char[] text = new char[ width ];
+
+			for( int i = 0; i < width; i++ )
+			{
+				text[ i ] = i < value.Length ? value[ i ] : ' ';
+			}
+
+			return new string( text );
+		}
+
+		/// <summary>
+		/// Checks whether an I2C device responds at the specified 7-bit address.
+		/// </summary>
+		/// <remarks>Returns <see langword="false"/> if the I2C controller is not initialized or if the probe
+		/// operation throws an exception.</remarks>
+		/// <param name="address">7-bit I2C slave address to probe.</param>
+		/// <returns><see langword="true"/> when the address is acknowledged; otherwise, <see langword="false"/>.</returns>
 		private bool ProbeAddress( byte address )
 		{
 			bool result = false;

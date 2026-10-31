@@ -58,6 +58,7 @@
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="SerialBus.cs" />
+    <Compile Include="Storage.cs" />
     <Compile Include="Text.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -100,9 +101,6 @@
     </Reference>
     <Reference Include="GHIElectronics.TinyCLR.Drivers.Microchip.Winc15x0, Version=3.0.2.1000, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>packages\GHIElectronics.TinyCLR.Drivers.Microchip.Winc15x0.3.0.2.1000\lib\net48\GHIElectronics.TinyCLR.Drivers.Microchip.Winc15x0.dll</HintPath>
-    </Reference>
-    <Reference Include="GHIElectronics.TinyCLR.Drivers.VlsiSolution.VS1053B, Version=3.0.2.1000, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>packages\GHIElectronics.TinyCLR.Drivers.VlsiSolution.VS1053B.3.0.2.1000\lib\net48\GHIElectronics.TinyCLR.Drivers.VlsiSolution.VS1053B.dll</HintPath>
     </Reference>
     <Reference Include="GHIElectronics.TinyCLR.Drivers.WIZnet.W5500, Version=3.0.2.1000, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>packages\GHIElectronics.TinyCLR.Drivers.WIZnet.W5500.3.0.2.1000\lib\net48\GHIElectronics.TinyCLR.Drivers.WIZnet.W5500.dll</HintPath>
@@ -150,8 +148,8 @@
       <Project>{6898551B-EE98-4F02-B3E7-19407BC4E4DA}</Project>
       <Name>ImplicateX.TinyCLR.Drivers.Decoder.Ls7366</Name>
     </ProjectReference>
-    <ProjectReference Include="..\..\ImplicateX\TinyCLR\Drivers\Decoder\ImplicateX.TinyCLR.Drivers.Decoder.Vs1053\Library\ImplicateX.TinyCLR.Drivers.Decoder.Vs1053.csproj">
-      <Project>{6898551B-EE98-4F02-B3E7-19407BC4E5DB}</Project>
+    <ProjectReference Include="..\..\ImplicateX\TinyCLR\Drivers\Decoder\ImplicateX.TinyCLR.Drivers.Decoder.Vs1053\ImplicateX.TinyCLR.Drivers.Decoder.Vs1053.csproj">
+      <Project>{7A660E98-FA49-4A18-B9C0-9732765D84CE}</Project>
       <Name>ImplicateX.TinyCLR.Drivers.Decoder.Vs1053</Name>
     </ProjectReference>
     <ProjectReference Include="..\..\ImplicateX\TinyCLR\Drivers\Display\ImplicateX.TinyCLR.Drivers.Display.Generic16x2VFD\ImplicateX.TinyCLR.Drivers.Display.Generic16x2VFD.csproj">
